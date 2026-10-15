@@ -1,8 +1,12 @@
 // The free edge tier streams pre-signed data. Parsing, validation and signing run
 // in the publisher, outside the edge CPU limit. No private key lives here.
+import { refreshAgingPublication } from './scheduler';
 export type Metadata = { version: number; expiresAt: string; count: number; encoding: 'gzip' };
-export type DeliveryEnv = { TWB_RULESETS: { getWithMetadata(key: string, options: { type: 'stream'; cacheTtl: number }): Promise<{ value: ReadableStream<Uint8Array> | null; metadata: Metadata | null }> } };
+export type DeliveryEnv = { TWB_GITHUB_DISPATCH_TOKEN?: string; TWB_RULESETS: { getWithMetadata(key: string, options: { type: 'stream'; cacheTtl: number }): Promise<{ value: ReadableStream<Uint8Array> | null; metadata: Metadata | null }> } };
 export default {
+  async scheduled(_event: unknown, env: DeliveryEnv): Promise<void> {
+    await refreshAgingPublication(env);
+  },
   async fetch(request: Request, env: DeliveryEnv): Promise<Response> {
     const url = new URL(request.url);
     const headers = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' });
