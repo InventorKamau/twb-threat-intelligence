@@ -32,11 +32,26 @@ await publisher.refresh();
 if (!publisher.current || !publisher.envelope || publisher.current.version === previousVersion) throw new Error('Source refresh failed; no deployment produced');
 const serialized = JSON.stringify(publisher.envelope), compressed = gzipSync(serialized);
 if (compressed.length > 25 * 1024 * 1024) throw new Error('Snapshot exceeds delivery capacity');
-const form = new FormData();
-form.set('value', new Blob([compressed]), 'ruleset.gz');
 const sourceExpiresAt = new Date(Math.max(0, ...publisher.current.sources.filter(b => b.records.length > 0).map(b => Date.parse(b.expiresAt)))).toISOString();
-form.set('metadata', JSON.stringify({ version: publisher.current.version, expiresAt: publisher.current.expiresAt, sourceExpiresAt, count: publisher.current.sources.reduce((n, b) => n + b.records.length, 0), encoding: 'gzip' }));
-const uploaded = await fetch(kvUrl, { method: 'PUT', headers: { authorization: `Bearer ${token}` }, body: form, signal: AbortSignal.timeout(25000), redirect: 'error' });
-const result = await uploaded.json() as { success?: boolean };
-if (!uploaded.ok || !result.success) throw new Error('Delivery publication failed');
-console.log(JSON.stringify({ event: 'published', version: publisher.current.version, sources: publisher.sourceHealth, compressedBytes: compressed.length }));
+const metadata = { version: publisher.current.version, expiresAt: publisher.current.expiresAt, sourceExpiresAt, count: publisher.current.sources.reduce((n, b) => n + b.records.length, 0), encoding: 'gzip' };
+async function upload(key: 'current' | 'delta', bytes: Uint8Array<ArrayBuffer>, details: Record<string, unknown>): Promise<void> {
+  const form = new FormData();
+  form.set('value', new Blob([bytes]), 'ruleset.gz'); form.set('metadata', JSON.stringify(details));
+  const uploaded = await fetch(kvUrl.replace(/current$/, key), { method: 'PUT', headers: { authorization: `Bearer ${token}` }, body: form, signal: AbortSignal.timeout(25000), redirect: 'error' });
+  const result = await uploaded.json() as { success?: boolean };
+  if (!uploaded.ok || !result.success) throw new Error('Delivery publication failed');
+}
+let deltaBytes = 0, deltaBaseVersion: number | undefined;
+if (publisher.delta) {
+  const delta = gzipSync(JSON.stringify(publisher.delta));
+  if (delta.length < compressed.length) {
+    // Publish the optional delta first. A partial failure leaves the prior full
+    // publication authoritative; delivery validates both generations before use.
+    try {
+      await upload('delta', delta, { ...metadata, baseVersion: publisher.delta.baseVersion });
+      deltaBytes = delta.length; deltaBaseVersion = publisher.delta.baseVersion;
+    } catch { /* Optional transport failure must not prevent a fresh full publication. */ }
+  }
+}
+await upload('current', compressed, { ...metadata, ...(deltaBaseVersion ? { deltaBaseVersion } : {}) });
+console.log(JSON.stringify({ event: 'published', version: publisher.current.version, sources: publisher.sourceHealth, compressedBytes: compressed.length, deltaBytes, deltaBaseVersion }));

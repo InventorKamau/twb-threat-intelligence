@@ -4,7 +4,7 @@ Publisher and read-only Cloudflare delivery service for TwB Security. The browse
 
 CERT Polska supplies the domain warning list under its published commercial-use terms: https://cert.pl/lista-ostrzezen/. Source attribution does not imply endorsement or partnership. No malware or phishing pages are fetched.
 
-GitHub Actions fetches the official source, validates it, signs compact full snapshots and publishes compressed data to a dedicated Cloudflare KV namespace. The edge service has no signing key. Clients independently verify signatures. Failed refreshes never extend source expiry.
+GitHub Actions fetches the official source, validates it, signs full snapshots, derives bounded incremental updates and publishes compressed data to a dedicated Cloudflare KV namespace. The edge service has no signing key. Clients independently verify signatures over the complete reconstructed snapshot. /v1/ruleset remains a full snapshot for older clients; /v1/update selects a delta only for the exact prior public version and otherwise returns the full snapshot. No browsing data is accepted. Failed refreshes never extend source expiry.
 
 Required repository secrets: TWB_SIGNING_KEY_JSON (private key material), CLOUDFLARE_API_TOKEN (dedicated account KV write permission). Required repository variables: CLOUDFLARE_ACCOUNT_ID, TWB_KV_NAMESPACE_ID. The public trust root is deploy/release.public.json. Never commit private keys or provider tokens.
 

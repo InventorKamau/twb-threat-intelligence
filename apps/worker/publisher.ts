@@ -3,6 +3,7 @@ import { readFile, mkdir, open, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { validateRemote, verifyEnvelope, MAX_SOURCE_AGE, type RemoteRuleset, type SignedEnvelope, type SourceBatch, type Trust } from '../../packages/intelligence/index';
 import { CERT_ENDPOINT, certBatch, checkedUrlhausEndpoint, download, urlhausBatch } from './feeds';
+import { createDelta, type RulesDelta } from '../../packages/intelligence/delta';
 
 export async function atomicWrite(file: string, content: string): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true });
@@ -23,6 +24,7 @@ type SourceHealth = { source: string; ok: boolean; count: number; omitted: numbe
 export class Publisher {
   current?: RemoteRuleset;
   envelope?: SignedEnvelope;
+  delta?: RulesDelta;
   sourceHealth: SourceHealth[] = [];
   lastAttempt?: string;
   busy = false;
@@ -74,9 +76,10 @@ export class Publisher {
     if (this.current && next.version <= this.current.version) throw new Error('Publication version must increase');
     const envelope = await signRules(next, this.options.privateKey, this.options.trust.keyId);
     await verifyEnvelope(envelope, this.options.trust, this.current?.version ?? 0);
+    const delta = this.envelope ? await createDelta(this.envelope, envelope) : undefined;
     if (this.envelope) await atomicWrite(path.join(this.options.directory, 'previous.json'), JSON.stringify(this.envelope));
     await atomicWrite(path.join(this.options.directory, 'current.json'), JSON.stringify(envelope));
-    this.current = next; this.envelope = envelope;
+    this.current = next; this.envelope = envelope; this.delta = delta;
   }
   async rollback(): Promise<void> {
     if (!this.current) throw new Error('No current publication to roll back');
