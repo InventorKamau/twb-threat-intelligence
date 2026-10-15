@@ -1,0 +1,6 @@
+{
+  "endpoint": "https://twb-intelligence.capkamau.workers.dev/v1/ruleset",
+  "keyId": "c336fe45-023e-434b-af35-243a853de7ab",
+  "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEfs4AMeoHPrzDC5dogQh4orb6dXR2TtXPz4hZ5hZzF2iXVN9qIJwfQedsqvnWSG/QzNn6gUOjhzA6QqxwkImpXA==",
+  "minimumVersion": 1
+}

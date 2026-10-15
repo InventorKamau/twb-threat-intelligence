@@ -1,0 +1,12 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "twb-intelligence",
+  "main": "../apps/delivery/worker.ts",
+  "compatibility_date": "2026-10-15",
+  "workers_dev": true,
+  "observability": { "enabled": false },
+  "kv_namespaces": [
+    { "binding": "TWB_RULESETS", "id": "656d57b8162048fc918a053c710f15e5" }
+  ]
+}
+

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+service-data/
+.env*
+*.key
+*.pem
+.wrangler/
