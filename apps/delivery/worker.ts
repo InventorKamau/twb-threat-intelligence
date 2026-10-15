@@ -23,7 +23,10 @@ export default {
       if (request.headers.get('if-none-match') === etag) { await value.cancel(); return new Response(null, { status: 304, headers }); }
       headers.set('content-encoding', 'gzip');
       if (request.method === 'HEAD') { await value.cancel(); return new Response(null, { headers }); }
-      return new Response(value, { headers });
+      // KV already contains gzip bytes. Workers otherwise compresses this body
+      // again, leaving clients with compressed bytes after HTTP decoding.
+      const options: ResponseInit & { encodeBody: 'manual' } = { headers, encodeBody: 'manual' };
+      return new Response(value, options);
     } catch { return new Response('{"status":"degraded","error":"Intelligence storage unavailable"}', { status: 503, headers }); }
   },
 };
