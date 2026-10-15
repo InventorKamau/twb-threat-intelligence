@@ -2,6 +2,20 @@ import type { DeliveryEnv } from './worker';
 
 const dispatch = 'https://api.github.com/repos/InventorKamau/twb-threat-intelligence/actions/workflows/publish.yml/dispatches';
 
+export async function dispatchHealthMonitor(env: DeliveryEnv, fetcher: typeof fetch = (input, init) => globalThis.fetch(input, init)): Promise<void> {
+  if (env.TWB_MONITOR_ENABLED !== 'true') return;
+  if (!env.TWB_GITHUB_DISPATCH_TOKEN) throw new Error('Monitor dispatch credential missing');
+  try {
+    const response = await fetcher(dispatch.replace('/publish.yml/', '/monitor.yml/'), {
+      method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(20000),
+      headers: { authorization: `Bearer ${env.TWB_GITHUB_DISPATCH_TOKEN}`, accept: 'application/vnd.github+json', 'content-type': 'application/json', 'user-agent': 'TwB-Intelligence-Scheduler', 'x-github-api-version': '2022-11-28' },
+      body: JSON.stringify({ ref: 'main', inputs: { mode: 'normal' } }),
+    });
+    await response.body?.cancel();
+    if (response.status !== 204) throw new Error('Rejected');
+  } catch { throw new Error('Monitor dispatch failed'); }
+}
+
 // Small fallback only: feed parsing and signing stay on the hosted runner.
 // The dedicated GitHub token has Actions write on this one repository, no code
 // write or secrets-read permission, and is never available to HTTP clients.

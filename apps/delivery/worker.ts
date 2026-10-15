@@ -1,11 +1,14 @@
 // The free edge tier streams pre-signed data. Parsing, validation and signing run
 // in the publisher, outside the edge CPU limit. No private key lives here.
-import { refreshAgingPublication } from './scheduler';
+import { refreshAgingPublication, dispatchHealthMonitor } from './scheduler';
 export type Metadata = { version: number; expiresAt: string; sourceExpiresAt?: string; count: number; encoding: 'gzip'; deltaBaseVersion?: number; baseVersion?: number };
-export type DeliveryEnv = { TWB_GITHUB_DISPATCH_TOKEN?: string; TWB_RULESETS: { getWithMetadata(key: string, options: { type: 'stream'; cacheTtl: number }): Promise<{ value: ReadableStream<Uint8Array> | null; metadata: Metadata | null }> } };
+export type DeliveryEnv = { TWB_GITHUB_DISPATCH_TOKEN?: string; TWB_MONITOR_ENABLED?: string; TWB_RULESETS: { getWithMetadata(key: string, options: { type: 'stream'; cacheTtl: number }): Promise<{ value: ReadableStream<Uint8Array> | null; metadata: Metadata | null }> } };
 export default {
   async scheduled(_event: unknown, env: DeliveryEnv): Promise<void> {
-    await refreshAgingPublication(env);
+    // A failing publisher/KV read must not prevent dispatch of the external
+    // health check. GitHub also has its own schedule for delivery-plane outages.
+    const results = await Promise.allSettled([refreshAgingPublication(env), dispatchHealthMonitor(env)]);
+    if (results.some(result => result.status === 'rejected')) throw new Error('Scheduled reliability check failed');
   },
   async fetch(request: Request, env: DeliveryEnv): Promise<Response> {
     const url = new URL(request.url);

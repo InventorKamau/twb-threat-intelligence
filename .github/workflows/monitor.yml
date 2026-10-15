@@ -1,0 +1,37 @@
+name: Monitor TwB availability
+on:
+  schedule:
+    - cron: '4-59/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Normal check or explicitly labelled notification drill
+        type: choice
+        options: [normal, drill-outage, drill-recovery]
+        default: normal
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: twb-availability-monitor
+  cancel-in-progress: false
+jobs:
+  monitor:
+    if: github.repository == 'InventorKamau/twb-threat-intelligence' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.18.0'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - name: Confirm health and notify only on incident transitions
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TWB_MONITOR_MODE: ${{ inputs.mode || 'normal' }}
+        run: node dist/monitor.js
