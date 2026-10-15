@@ -1,7 +1,7 @@
 // The free edge tier streams pre-signed data. Parsing, validation and signing run
 // in the publisher, outside the edge CPU limit. No private key lives here.
 import { refreshAgingPublication } from './scheduler';
-export type Metadata = { version: number; expiresAt: string; count: number; encoding: 'gzip' };
+export type Metadata = { version: number; expiresAt: string; sourceExpiresAt?: string; count: number; encoding: 'gzip' };
 export type DeliveryEnv = { TWB_GITHUB_DISPATCH_TOKEN?: string; TWB_RULESETS: { getWithMetadata(key: string, options: { type: 'stream'; cacheTtl: number }): Promise<{ value: ReadableStream<Uint8Array> | null; metadata: Metadata | null }> } };
 export default {
   async scheduled(_event: unknown, env: DeliveryEnv): Promise<void> {
@@ -20,7 +20,9 @@ export default {
       }
       if (url.pathname === '/healthz') {
         await value.cancel();
-        return new Response(request.method === 'HEAD' ? null : JSON.stringify({ status: 'ready', version: metadata.version, expiresAt: metadata.expiresAt, indicators: metadata.count }), { headers });
+        const sourceExpiresAt = metadata.sourceExpiresAt ?? metadata.expiresAt;
+        const fresh = metadata.count > 0 && Date.parse(sourceExpiresAt) > Date.now();
+        return new Response(request.method === 'HEAD' ? null : JSON.stringify({ status: fresh ? 'ready' : 'degraded', version: metadata.version, expiresAt: metadata.expiresAt, sourceExpiresAt, indicators: metadata.count }), { status: fresh ? 200 : 503, headers });
       }
       const etag = `"twb-${metadata.version}"`;
       headers.set('etag', etag); headers.set('cache-control', 'public, max-age=60, must-revalidate');

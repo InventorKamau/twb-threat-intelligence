@@ -34,7 +34,8 @@ const serialized = JSON.stringify(publisher.envelope), compressed = gzipSync(ser
 if (compressed.length > 25 * 1024 * 1024) throw new Error('Snapshot exceeds delivery capacity');
 const form = new FormData();
 form.set('value', new Blob([compressed]), 'ruleset.gz');
-form.set('metadata', JSON.stringify({ version: publisher.current.version, expiresAt: publisher.current.expiresAt, count: publisher.current.sources.reduce((n, b) => n + b.records.length, 0), encoding: 'gzip' }));
+const sourceExpiresAt = new Date(Math.max(0, ...publisher.current.sources.filter(b => b.records.length > 0).map(b => Date.parse(b.expiresAt)))).toISOString();
+form.set('metadata', JSON.stringify({ version: publisher.current.version, expiresAt: publisher.current.expiresAt, sourceExpiresAt, count: publisher.current.sources.reduce((n, b) => n + b.records.length, 0), encoding: 'gzip' }));
 const uploaded = await fetch(kvUrl, { method: 'PUT', headers: { authorization: `Bearer ${token}` }, body: form, signal: AbortSignal.timeout(25000), redirect: 'error' });
 const result = await uploaded.json() as { success?: boolean };
 if (!uploaded.ok || !result.success) throw new Error('Delivery publication failed');
